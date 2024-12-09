@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Martingale Pattern</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            padding: 20px;
+            transition: background-color 0.3s, color 0.3s;
+        }
+        h1 {
+            color: inherit;
+        }
+        label {
+            font-size: 16px;
+            margin: 10px 0;
+            display: block;
+        }
+        input, button {
+            padding: 10px;
+            font-size: 16px;
+            margin: 5px;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+            width: 100%;
+            max-width: 300px;
+            transition: background-color 0.3s, color 0.3s;
+        }
+        .output {
+            margin-top: 20px;
+            font-size: 20px;
+            color: inherit;
+        }
+        .controls {
+            margin-top: 20px;
+            display: none; /* ซ่อนปุ่มแพ้/ชนะไว้ก่อน */
+        }
+        canvas {
+            margin-top: 30px;
+            max-width: 600px;
+        }
+        button {
+            cursor: pointer;
+        }
+
+        /* Dark Mode */
+        body.dark-mode {
+            background-color: #121212;
+            color: #fff;
+        }
+        body.dark-mode input, body.dark-mode button {
+            background-color: #333;
+            color: #fff;
+            border-color: #444;
+        }
+        body.dark-mode .output {
+            color: #ddd;
+        }
+        body.dark-mode .controls button {
+            background-color: #444;
+        }
+        body.dark-mode canvas {
+            background-color: #222;
+        }
+
+        /* เพิ่ม CSS สำหรับสรุปข้อมูล */
+        .summary {
+            margin-top: 20px;
+            font-size: 18px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <h1>Martingale Pattern Random</h1>
+    <label for="options">Enter Choices:</label>
+    <input type="text" id="options" placeholder="ex. P,B  B,S  A,B,C  Put,Call" />
+
+    <label for="bets">Enter Bet Amounts:</label>
+    <input type="text" id="bets" placeholder="ex. 1,2,4,8,16,32" />
+
+    <button onclick="startGame()">Start Game</button>
+    <button onclick="toggleDarkMode()">Dark Mode</button>
+
+    <div class="output">
+        <p id="currentRound">Press "Start Game" to begin!</p>
+        <p id="currentBet"></p>
+    </div>
+
+    <div class="controls">
+        <button onclick="nextRound(false)">แพ้</button>
+        <button onclick="nextRound(true)">ชนะ</button>
+    </div>
+
+    <canvas id="statsChart"></canvas>
+     <!-- แสดงสรุปข้อมูลด้านล่าง -->
+    <div class="summary" id="summary">
+        
+    </div>
+    
+
+    <script>
+        let options = [];
+        let bets = [];
+        let currentRound = 0;
+        let stats = [];
+        let chart; // สำหรับกราฟ
+
+        function startGame() {
+            // รับค่า input
+            const optionsInput = document.getElementById('options').value;
+            const betsInput = document.getElementById('bets').value;
+
+            // แปลงข้อมูล
+            options = optionsInput.split(',').map(opt => opt.trim());
+            bets = betsInput.split(',').map(bet => parseFloat(bet));
+
+            // ตรวจสอบความถูกต้อง
+            if (options.length === 0 || bets.length === 0) {
+                alert('Please enter valid inputs!');
+                return;
+            }
+
+            // รีเซ็ตเกมและสถิติ
+            currentRound = 0;
+            stats = [0]; // เริ่มต้นที่ค่าศูนย์
+            updateDisplay();
+            updateChart();
+            document.querySelector('.controls').style.display = 'block'; // แสดงปุ่มแพ้/ชนะ
+            updateSummary();
+        }
+
+        function updateDisplay() {
+            if (currentRound < bets.length) {
+                const randomOption = options[Math.floor(Math.random() * options.length)];
+                document.getElementById('currentRound').innerText = `ไม้ที่ ${currentRound + 1}: ${randomOption}`;
+                document.getElementById('currentBet').innerText = `เดิมพัน: ${bets[currentRound]}`;
+            } else {
+                document.getElementById('currentRound').innerText = "Game Over! You reached the final round.";
+                document.getElementById('currentBet').innerText = "";
+                document.querySelector('.controls').style.display = 'none'; // ซ่อนปุ่มแพ้/ชนะ
+            }
+        }
+
+        function nextRound(isWin) {
+            const currentStat = stats[stats.length - 1]; // ค่าในรอบปัจจุบัน
+
+            if (isWin) {
+                stats.push(currentStat + bets[currentRound]); // เพิ่มกำไรจากรอบนี้
+                currentRound = 0; // ชนะแล้วเริ่มใหม่ที่ไม้ 1
+            } else {
+                stats.push(currentStat - bets[currentRound]); // ลดเงินจากรอบนี้
+                if (currentRound < bets.length - 1) {
+                    currentRound++;
+                } else {
+                    alert('You lost! No more rounds.');
+                    document.querySelector('.controls').style.display = 'none'; // ซ่อนปุ่มแพ้/ชนะ
+                }
+            }
+            updateDisplay();
+            updateChart();
+            updateSummary();
+        }
+
+        function updateChart() {
+            const ctx = document.getElementById('statsChart').getContext('2d');
+            const colors = stats.map((value, index) =>
+                index === 0 ? '#007bff' : value >= stats[index - 1] ? 'green' : 'red'
+            );
+
+            const data = {
+                labels: Array.from({ length: stats.length }, (_, i) => `Round ${i}`),
+                datasets: [{
+                    label: 'Profit/Loss Over Time',
+                    data: stats,
+                    borderColor: colors,
+                    backgroundColor: colors,
+                    fill: false,
+                    tension: 0.1,
+                    pointRadius: 5, // เพิ่มขนาดจุดข้อมูล
+                    pointHoverRadius: 7,
+                }]
+            };
+
+            if (chart) {
+                chart.destroy(); // ลบกราฟเก่า
+            }
+            chart = new Chart(ctx, {
+                type: 'line',
+                data: data,
+                options: {
+                    responsive: true,
+                    scales: {
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Rounds',
+                                font: { size: 16 }
+                            }
+                        },
+                        y: {
+                            title: {
+                                display: true,
+                                text: 'Profit/Loss',
+                                font: { size: 16 }
+                            },
+                            beginAtZero: false
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: true,
+                            labels: {
+                                color: 'black', // ปรับสีข้อความในตำนาน
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(tooltipItem) {
+                                    return ` ${tooltipItem.raw >= 0 ? 'Profit' : 'Loss'}: ${tooltipItem.raw}`;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // อัปเดตสรุปข้อมูลที่ด้านล่าง
+        function updateSummary() {
+            const totalMoney = stats[stats.length - 1];
+            const roundNumber = stats.length - 1;
+            document.getElementById('summary').innerText = `Round: ${roundNumber}   |   Balance: ${totalMoney}`;
+        }
+
+        // Toggle Dark Mode
+        function toggleDarkMode() {
+            const body = document.body;
+            body.classList.toggle('dark-mode'); // สลับโหมดมืด
+        }
+    </script>
+</body>
+</html>
