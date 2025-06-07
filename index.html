@@ -37,7 +37,7 @@
         }
         .controls {
             margin-top: 20px;
-            display: none; /* ซ่อนปุ่มแพ้/ชนะไว้ก่อน */
+            display: none;
         }
         canvas {
             margin-top: 30px;
@@ -67,7 +67,6 @@
             background-color: #222;
         }
 
-        /* เพิ่ม CSS สำหรับสรุปข้อมูล */
         .summary {
             margin-top: 20px;
             font-size: 18px;
@@ -77,11 +76,15 @@
 </head>
 <body>
     <h1>Martingale Pattern Random</h1>
+    
     <label for="options">Enter Choices:</label>
     <input type="text" id="options" placeholder="ex. P,B  B,S  A,B,C  Put,Call" />
 
     <label for="bets">Enter Bet Amounts:</label>
     <input type="text" id="bets" placeholder="ex. 1,2,4,8,16,32" />
+
+    <label for="payout">Enter Payout (%):</label>
+    <input type="text" id="payout" placeholder="ex. 90" />
 
     <button onclick="startGame()">Start Game</button>
     <button onclick="toggleDarkMode()">Dark Mode</button>
@@ -97,40 +100,36 @@
     </div>
 
     <canvas id="statsChart"></canvas>
-     <!-- แสดงสรุปข้อมูลด้านล่าง -->
-    <div class="summary" id="summary">
-        
-    </div>
-    
+
+    <div class="summary" id="summary"></div>
 
     <script>
         let options = [];
         let bets = [];
+        let payoutRate = 1; // Default payout rate
         let currentRound = 0;
         let stats = [];
-        let chart; // สำหรับกราฟ
+        let chart;
 
         function startGame() {
-            // รับค่า input
             const optionsInput = document.getElementById('options').value;
             const betsInput = document.getElementById('bets').value;
+            const payoutInput = document.getElementById('payout').value.trim();
 
-            // แปลงข้อมูล
             options = optionsInput.split(',').map(opt => opt.trim());
             bets = betsInput.split(',').map(bet => parseFloat(bet));
+            payoutRate = parseFloat(payoutInput) / 100;
 
-            // ตรวจสอบความถูกต้อง
-            if (options.length === 0 || bets.length === 0) {
+            if (options.length === 0 || bets.length === 0 || isNaN(payoutRate) || payoutRate <= 0 || payoutRate > 1.5) {
                 alert('Please enter valid inputs!');
                 return;
             }
 
-            // รีเซ็ตเกมและสถิติ
             currentRound = 0;
-            stats = [0]; // เริ่มต้นที่ค่าศูนย์
+            stats = [0];
             updateDisplay();
             updateChart();
-            document.querySelector('.controls').style.display = 'block'; // แสดงปุ่มแพ้/ชนะ
+            document.querySelector('.controls').style.display = 'block';
             updateSummary();
         }
 
@@ -142,23 +141,23 @@
             } else {
                 document.getElementById('currentRound').innerText = "Game Over! You reached the final round.";
                 document.getElementById('currentBet').innerText = "";
-                document.querySelector('.controls').style.display = 'none'; // ซ่อนปุ่มแพ้/ชนะ
+                document.querySelector('.controls').style.display = 'none';
             }
         }
 
         function nextRound(isWin) {
-            const currentStat = stats[stats.length - 1]; // ค่าในรอบปัจจุบัน
+            const currentStat = stats[stats.length - 1];
 
             if (isWin) {
-                stats.push(currentStat + bets[currentRound]); // เพิ่มกำไรจากรอบนี้
-                currentRound = 0; // ชนะแล้วเริ่มใหม่ที่ไม้ 1
+                stats.push(currentStat + (bets[currentRound] * payoutRate));
+                currentRound = 0;
             } else {
-                stats.push(currentStat - bets[currentRound]); // ลดเงินจากรอบนี้
+                stats.push(currentStat - bets[currentRound]);
                 if (currentRound < bets.length - 1) {
                     currentRound++;
                 } else {
                     alert('You lost! No more rounds.');
-                    document.querySelector('.controls').style.display = 'none'; // ซ่อนปุ่มแพ้/ชนะ
+                    document.querySelector('.controls').style.display = 'none';
                 }
             }
             updateDisplay();
@@ -181,13 +180,13 @@
                     backgroundColor: colors,
                     fill: false,
                     tension: 0.1,
-                    pointRadius: 5, // เพิ่มขนาดจุดข้อมูล
+                    pointRadius: 5,
                     pointHoverRadius: 7,
                 }]
             };
 
             if (chart) {
-                chart.destroy(); // ลบกราฟเก่า
+                chart.destroy();
             }
             chart = new Chart(ctx, {
                 type: 'line',
@@ -215,13 +214,13 @@
                         legend: {
                             display: true,
                             labels: {
-                                color: 'black', // ปรับสีข้อความในตำนาน
+                                color: 'black',
                             }
                         },
                         tooltip: {
                             callbacks: {
                                 label: function(tooltipItem) {
-                                    return ` ${tooltipItem.raw >= 0 ? 'Profit' : 'Loss'}: ${tooltipItem.raw}`;
+                                    return ` ${tooltipItem.raw >= 0 ? 'Profit' : 'Loss'}: ${tooltipItem.raw.toFixed(2)}`;
                                 }
                             }
                         }
@@ -230,17 +229,14 @@
             });
         }
 
-        // อัปเดตสรุปข้อมูลที่ด้านล่าง
         function updateSummary() {
             const totalMoney = stats[stats.length - 1];
             const roundNumber = stats.length - 1;
-            document.getElementById('summary').innerText = `Round: ${roundNumber}   |   Balance: ${totalMoney}`;
+            document.getElementById('summary').innerText = `Round: ${roundNumber}   |   Balance: ${totalMoney.toFixed(2)}`;
         }
 
-        // Toggle Dark Mode
         function toggleDarkMode() {
-            const body = document.body;
-            body.classList.toggle('dark-mode'); // สลับโหมดมืด
+            document.body.classList.toggle('dark-mode');
         }
     </script>
 </body>
