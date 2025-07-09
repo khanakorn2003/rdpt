@@ -1,242 +1,116 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="th">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Martingale Pattern</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <title>Blitz Simulator</title>
     <style>
         body {
             font-family: Arial, sans-serif;
             text-align: center;
             padding: 20px;
-            transition: background-color 0.3s, color 0.3s;
+            background: #121212;
+            color: #fff;
         }
-        h1 {
-            color: inherit;
-        }
-        label {
-            font-size: 16px;
-            margin: 10px 0;
-            display: block;
-        }
-        input, button {
+        input, select, button {
             padding: 10px;
-            font-size: 16px;
             margin: 5px;
+            font-size: 16px;
+            width: 250px;
             border-radius: 5px;
-            border: 1px solid #ccc;
-            width: 100%;
-            max-width: 300px;
-            transition: background-color 0.3s, color 0.3s;
+            border: none;
         }
-        .output {
-            margin-top: 20px;
-            font-size: 20px;
-            color: inherit;
+        input {
+            background: #1e1e1e;
+            color: #fff;
         }
-        .controls {
-            margin-top: 20px;
-            display: none;
-        }
-        canvas {
-            margin-top: 30px;
-            max-width: 600px;
-        }
-        button {
+        select, button {
+            background: #333;
+            color: #fff;
             cursor: pointer;
         }
-
-        /* Dark Mode */
-        body.dark-mode {
-            background-color: #121212;
-            color: #fff;
+        button:hover {
+            background: #444;
         }
-        body.dark-mode input, body.dark-mode button {
-            background-color: #333;
-            color: #fff;
-            border-color: #444;
-        }
-        body.dark-mode .output {
-            color: #ddd;
-        }
-        body.dark-mode .controls button {
-            background-color: #444;
-        }
-        body.dark-mode canvas {
-            background-color: #222;
-        }
-
-        .summary {
+        .result {
             margin-top: 20px;
             font-size: 18px;
-            font-weight: bold;
+            background: #222;
+            padding: 20px;
+            border-radius: 10px;
         }
     </style>
 </head>
 <body>
-    <h1>Martingale Pattern Random</h1>
-    
-    <label for="options">Enter Choices:</label>
-    <input type="text" id="options" placeholder="ex. P,B  Put,Call  A,B,C  " />
 
-    <label for="bets">Enter Bet Amounts:</label>
-    <input type="text" id="bets" placeholder="ex. 1,2,4,8,16,32" />
+    <h1>💸 Blitz Simulator</h1>
 
-    <label for="payout">Enter Payout (%):</label>
-    <input type="text" id="payout" placeholder="ex. 90" />
+    <input type="text" id="bets" placeholder="ใส่จำนวนไม้ เช่น 10,20,40" /><br>
+    <input type="number" id="payout" placeholder="อัตราการจ่าย (%) เช่น 90" /><br>
+    <input type="number" id="winRate" placeholder="อัตราการชนะ (%) เช่น 50" /><br>
 
-    <button onclick="startGame()">Start Game</button>
-    <button onclick="toggleDarkMode()">Dark Mode</button>
+    <select id="stopMode">
+        <option value="WinCount">หยุดเมื่อชนะครบ</option>
+        <option value="ProfitTarget">หยุดเมื่อได้กำไรครบ</option>
+    </select><br>
 
-    <div class="output">
-        <p id="currentRound">Press "Start Game" to begin!</p>
-        <p id="currentBet"></p>
-    </div>
+    <input type="number" id="targetValue" placeholder="เป้าหมาย (ครั้ง หรือ บาท)" /><br>
+    <button onclick="runSimulation()">▶ เริ่มจำลอง</button>
 
-    <div class="controls">
-        <button onclick="nextRound(false)">แพ้</button>
-        <button onclick="nextRound(true)">ชนะ</button>
-    </div>
-
-    <canvas id="statsChart"></canvas>
-
-    <div class="summary" id="summary"></div>
+    <div class="result" id="resultBox"></div>
 
     <script>
-        let options = [];
-        let bets = [];
-        let payoutRate = 1; // Default payout rate
-        let currentRound = 0;
-        let stats = [];
-        let chart;
+        function runSimulation() {
+            const bets = document.getElementById('bets').value.split(',').map(Number);
+            const payout = parseFloat(document.getElementById('payout').value) / 100;
+            const winRate = parseFloat(document.getElementById('winRate').value) / 100;
+            const stopMode = document.getElementById('stopMode').value;
+            const target = parseFloat(document.getElementById('targetValue').value);
 
-        function startGame() {
-            const optionsInput = document.getElementById('options').value;
-            const betsInput = document.getElementById('bets').value;
-            const payoutInput = document.getElementById('payout').value.trim();
+            let winCount = 0, loseCount = 0, round = 0, profit = 0, betIndex = 0;
+            let maxStep = 0;
+            let turnover = 0;
 
-            options = optionsInput.split(',').map(opt => opt.trim());
-            bets = betsInput.split(',').map(bet => parseFloat(bet));
-            payoutRate = parseFloat(payoutInput) / 100;
+            const log = [];
 
-            if (options.length === 0 || bets.length === 0 || isNaN(payoutRate) || payoutRate <= 0 || payoutRate > 1.5) {
-                alert('Please enter valid inputs!');
-                return;
-            }
+            while (true) {
+                if (stopMode === 'WinCount' && winCount >= target) break;
+                if (stopMode === 'ProfitTarget' && profit >= target) break;
 
-            currentRound = 0;
-            stats = [0];
-            updateDisplay();
-            updateChart();
-            document.querySelector('.controls').style.display = 'block';
-            updateSummary();
-        }
+                const bet = bets[betIndex] || bets[bets.length - 1];
+                turnover += bet;
+                const isWin = Math.random() < winRate;
 
-        function updateDisplay() {
-            if (currentRound < bets.length) {
-                const randomOption = options[Math.floor(Math.random() * options.length)];
-                document.getElementById('currentRound').innerText = `ไม้ที่ ${currentRound + 1}: ${randomOption}`;
-                document.getElementById('currentBet').innerText = `เดิมพัน: ${bets[currentRound]}`;
-            } else {
-                document.getElementById('currentRound').innerText = "Game Over! You reached the final round.";
-                document.getElementById('currentBet').innerText = "";
-                document.querySelector('.controls').style.display = 'none';
-            }
-        }
-
-        function nextRound(isWin) {
-            const currentStat = stats[stats.length - 1];
-
-            if (isWin) {
-                stats.push(currentStat + (bets[currentRound] * payoutRate));
-                currentRound = 0;
-            } else {
-                stats.push(currentStat - bets[currentRound]);
-                if (currentRound < bets.length - 1) {
-                    currentRound++;
+                if (isWin) {
+                    const gain = bet * payout;
+                    profit += gain;
+                    winCount++;
+                    log.push(`✅ ชนะไม้ ${betIndex + 1} (+${gain.toFixed(2)}฿)`);
+                    betIndex = 0;
                 } else {
-                    alert('You lost! No more rounds.');
-                    document.querySelector('.controls').style.display = 'none';
-                }
-            }
-            updateDisplay();
-            updateChart();
-            updateSummary();
-        }
-
-        function updateChart() {
-            const ctx = document.getElementById('statsChart').getContext('2d');
-            const colors = stats.map((value, index) =>
-                index === 0 ? '#007bff' : value >= stats[index - 1] ? 'green' : 'red'
-            );
-
-            const data = {
-                labels: Array.from({ length: stats.length }, (_, i) => `Round ${i}`),
-                datasets: [{
-                    label: 'Profit/Loss Over Time',
-                    data: stats,
-                    borderColor: colors,
-                    backgroundColor: colors,
-                    fill: false,
-                    tension: 0.1,
-                    pointRadius: 5,
-                    pointHoverRadius: 7,
-                }]
-            };
-
-            if (chart) {
-                chart.destroy();
-            }
-            chart = new Chart(ctx, {
-                type: 'line',
-                data: data,
-                options: {
-                    responsive: true,
-                    scales: {
-                        x: {
-                            title: {
-                                display: true,
-                                text: 'Rounds',
-                                font: { size: 16 }
-                            }
-                        },
-                        y: {
-                            title: {
-                                display: true,
-                                text: 'Profit/Loss',
-                                font: { size: 16 }
-                            },
-                            beginAtZero: false
-                        }
-                    },
-                    plugins: {
-                        legend: {
-                            display: true,
-                            labels: {
-                                color: 'black',
-                            }
-                        },
-                        tooltip: {
-                            callbacks: {
-                                label: function(tooltipItem) {
-                                    return ` ${tooltipItem.raw >= 0 ? 'Profit' : 'Loss'}: ${tooltipItem.raw.toFixed(2)}`;
-                                }
-                            }
-                        }
+                    profit -= bet;
+                    loseCount++;
+                    log.push(`❌ แพ้ไม้ ${betIndex + 1} (-${bet.toFixed(2)}฿)`);
+                    betIndex++;
+                    if (betIndex >= bets.length) {
+                        log.push("🛑 แพ้จนหมดไม้");
+                        break;
                     }
                 }
-            });
-        }
+                maxStep = Math.max(maxStep, betIndex + 1);
+                round++;
+            }
 
-        function updateSummary() {
-            const totalMoney = stats[stats.length - 1];
-            const roundNumber = stats.length - 1;
-            document.getElementById('summary').innerText = `Round: ${roundNumber}   |   Balance: ${totalMoney.toFixed(2)}`;
-        }
-
-        function toggleDarkMode() {
-            document.body.classList.toggle('dark-mode');
+            const resultBox = document.getElementById('resultBox');
+            resultBox.innerHTML = `
+                <strong>📊 ผลลัพธ์:</strong><br>
+                รอบทั้งหมด: ${round}<br>
+                ชนะ: ${winCount} แพ้: ${loseCount}<br>
+                กำไรสุทธิ: ${profit.toFixed(2)} บาท<br>
+                เดินไปสูงสุดไม้ที่: ${maxStep}<br>
+                💰 ยอดเทิร์นรวม: ${turnover.toFixed(2)} บาท
+                <hr>
+                ${log.join("<br>")}
+            `;
         }
     </script>
 </body>
